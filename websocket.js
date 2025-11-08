@@ -12,7 +12,9 @@ const wss = new WebSocket.Server({ port: 8080 });
 
 let enviadoHoje = false;
 let ultimoTimestampEnviado = null;
-let tipoAgregacao = 'media'; // agora global
+let tipoAgregacao = 'media';
+let dia = null;
+let horaInicial = null;
 
 wss.on('connection', async (ws) => {
   console.log('Cliente conectado ao WebSocket');
@@ -24,16 +26,27 @@ wss.on('connection', async (ws) => {
         tipoAgregacao = data.tipoAgregacao;
         console.log(`Tipo de agregação alterado para: ${tipoAgregacao}`);
       }
+      if (data.dia && data.horaInicial) {
+        dia = data.dia;
+        horaInicial = data.horaInicial;
+        console.log(`Parâmetros recebidos: dia=${dia}, horaInicial=${horaInicial}`);
+      }
     } catch (e) {
       console.error('Erro ao interpretar mensagem do cliente:', e);
     }
   });
 
   try {
+    if (!dia || !horaInicial) {
+      console.error('Parâmetros dia e horaInicial não foram enviados pelo cliente.');
+      return;
+    }
+
     const conn = await mysql.createConnection(dbConfig);
-    const [rows] = await conn.execute(`
-      SELECT * FROM grafico WHERE DATE(timestamp) = CURDATE() ORDER BY timestamp ASC
-    `);
+    const [rows] = await conn.execute(
+      "SELECT * FROM grafico WHERE DATE(timestamp) = ? AND TIME(timestamp) >= ? ORDER BY timestamp ASC",
+      [dia, horaInicial]
+    );
     await conn.end();
 
     const agrupado = agruparPorIntervalo(rows, 5, tipoAgregacao);
@@ -50,11 +63,9 @@ wss.on('connection', async (ws) => {
 // Função para agrupar por intervalos fixos
 function agruparPorIntervalo(rows, intervaloMinutos = 5, tipoAgregacao = 'media') {
   if (!rows || rows.length === 0) return [];
-
   const inicioDia = new Date(rows[0].timestamp);
   inicioDia.setSeconds(0, 0);
   const fimDia = new Date(rows[rows.length - 1].timestamp);
-
   const agrupado = [];
   let intervaloInicio = new Date(inicioDia);
 
@@ -67,7 +78,7 @@ function agruparPorIntervalo(rows, intervaloMinutos = 5, tipoAgregacao = 'media'
 
     let agregado;
     if (bloco.length > 0) {
-      agregado = calcularAgregacao(bloco, tipoAgregacao);
+      agregado = calcularAgregacao(bloco, tipoAgregacao, intervaloInicio, intervaloFim);
     } else {
       agregado = {
         inicio: intervaloInicio.toISOString(),
@@ -77,16 +88,14 @@ function agruparPorIntervalo(rows, intervaloMinutos = 5, tipoAgregacao = 'media'
         rastro_parcial: null, rastro_acumulado: null
       };
     }
-
     agrupado.push(agregado);
     intervaloInicio = intervaloFim;
   }
-
   return agrupado;
 }
 
 // Função para calcular agregação
-function calcularAgregacao(bloco, tipo) {
+function calcularAgregacao(bloco, tipo, intervaloInicio = null, intervaloFim = null) {
   const soma = {
     alta: 0, queda: 0, neutro: 0,
     acumulado_alta: 0, acumulado_queda: 0, acumulado_neutro: 0,
@@ -110,8 +119,8 @@ function calcularAgregacao(bloco, tipo) {
   }
 
   return {
-    inicio: bloco[0].timestamp,
-    fim: bloco[bloco.length - 1].timestamp,
+    inicio: intervaloInicio ? intervaloInicio.toISOString() : bloco[0].timestamp,
+    fim: intervaloFim ? intervaloFim.toISOString() : bloco[bloco.length - 1].timestamp,
     ...soma
   };
 }
@@ -119,17 +128,19 @@ function calcularAgregacao(bloco, tipo) {
 // Enviar dados a cada 5 minutos
 setInterval(async () => {
   try {
+    if (!dia || !horaInicial) return;
+
     const conn = await mysql.createConnection(dbConfig);
-    const [rows] = await conn.execute(`
-      SELECT * FROM grafico WHERE DATE(timestamp) = CURDATE() ORDER BY timestamp ASC
-    `);
+    const [rows] = await conn.execute(
+      "SELECT * FROM grafico WHERE DATE(timestamp) = ? AND TIME(timestamp) >= ? ORDER BY timestamp ASC",
+      [dia, horaInicial]
+    );
     await conn.end();
 
     if (!enviadoHoje) {
       const agrupado = agruparPorIntervalo(rows, 5, tipoAgregacao);
       ultimoTimestampEnviado = agrupado[agrupado.length - 1].fim;
       enviadoHoje = true;
-
       wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
           client.send(JSON.stringify({ tipo: 'full', dados: agrupado }));
@@ -139,9 +150,10 @@ setInterval(async () => {
     } else {
       const novosRegistros = rows.filter(r => new Date(r.timestamp) > new Date(ultimoTimestampEnviado));
       if (novosRegistros.length > 0) {
-        const novoBloco = calcularAgregacao(novosRegistros, tipoAgregacao);
+        const intervaloInicio = new Date(ultimoTimestampEnviado);
+        const intervaloFim = new Date(intervaloInicio.getTime() + 5 * 60000);
+        const novoBloco = calcularAgregacao(novosRegistros, tipoAgregacao, intervaloInicio, intervaloFim);
         ultimoTimestampEnviado = novoBloco.fim;
-
         wss.clients.forEach(client => {
           if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ tipo: 'incremento', dados: novoBloco }));
@@ -153,4 +165,4 @@ setInterval(async () => {
   } catch (err) {
     console.error('Erro ao enviar dados via WebSocket:', err);
   }
-}, 5 * 60 * 1000); // 5 minutos
+}, 5 * 60 * 1000);
