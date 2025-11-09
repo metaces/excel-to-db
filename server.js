@@ -22,6 +22,34 @@ async function getRegraPorCodigo(conn, codigo) {
   return rows.length > 0 ? rows[0] : null;
 }
 
+app.get('/ativos/mapa', async (req, res) => {
+  const { dia, horaInicial } = req.query; // Ex: dia=2025-11-09, horaInicial=08:00
+  try {
+    const conn = await mysql.createConnection(dbConfig);
+
+    let query = `
+      SELECT nome, tipo, sinal, COUNT(*) as qtd
+      FROM ativos
+      WHERE DATE(timestamp) = ?
+    `;
+    const params = [dia];
+
+    if (horaInicial) {
+      query += ` AND TIME(timestamp) >= ?`;
+      params.push(horaInicial);
+    }
+
+    query += ` GROUP BY nome, tipo, sinal`;
+
+    const [rows] = await conn.execute(query, params);
+    await conn.end();
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar mapa de calor dos ativos' });
+  }
+});
+
 // Histórico completo
 app.get('/grafico', async (req, res) => {
     try {
