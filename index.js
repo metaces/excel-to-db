@@ -5,12 +5,13 @@ const mysql = require('mysql2/promise');
 const cron = require('node-cron');
 const { processarAtivos } = require('./processa-ativos');
 const { atualizarGrafico } = require('./atualizar-grafico');
+require('dotenv').config();
 
 const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'senha123',
-  database: 'finance_data'
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME
 };
 
 const cotacoesPath = 'C:/Users/cealbert/Downloads/Macro_Watchlist_MACROEXCEL.csv';

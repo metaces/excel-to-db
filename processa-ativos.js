@@ -1,4 +1,5 @@
 const mysql = require('mysql2/promise');
+require('dotenv').config();
 
 // Busca regra específica para o ativo pelo código
 async function getRegraPorCodigo(conn, codigo) {
@@ -11,10 +12,10 @@ async function getRegraPorCodigo(conn, codigo) {
 
 async function processarAtivos(cotacoes) {
   const conn = await mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'senha123',
-    database: 'finance_data'
+    host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME
   });
 
   const timestamp = new Date();

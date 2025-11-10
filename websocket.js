@@ -1,11 +1,28 @@
+
+function arredondarCustom(valor) {
+    if (isNaN(valor)) valor = 0;
+    const sinal = valor >= 0 ? 1 : -1;
+    const valorAbs = Math.abs(valor);
+    let parteInteira = Math.floor(valorAbs);
+    const parteDecimal = valorAbs - parteInteira;
+    if (parteDecimal >= 0.30) {
+        parteInteira += 1;
+    }
+    const resultado = sinal * parteInteira;
+    return resultado.toFixed(2);
+}
+
+
 const WebSocket = require('ws');
 const mysql = require('mysql2/promise');
 
+require('dotenv').config();
+
 const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: 'senha123',
-    database: 'finance_data'
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME
 };
 
 const wss = new WebSocket.Server({ port: 8080 });
@@ -108,24 +125,29 @@ function calcularAgregacao(bloco, tipo, intervaloInicio = null, intervaloFim = n
     };
 
     bloco.forEach(r => {
-        soma.alta += r.alta;
-        soma.queda += r.queda;
-        soma.neutro += r.neutro;
-        soma.acumulado_alta += r.acumulado_alta;
-        soma.acumulado_queda += r.acumulado_queda;
-        soma.acumulado_neutro += r.acumulado_neutro;
-        soma.rastro_parcial += r.rastro_parcial;
-        soma.rastro_acumulado += r.rastro_acumulado;
+        soma.alta += Number(r.alta) || 0;
+        soma.queda += Number(r.queda) || 0;
+        soma.neutro += Number(r.neutro) || 0;
+        soma.acumulado_alta += Number(r.acumulado_alta) || 0;
+        soma.acumulado_queda += Number(r.acumulado_queda) || 0;
+        soma.acumulado_neutro += Number(r.acumulado_neutro) || 0;
+        soma.rastro_parcial += Number(r.rastro_parcial) || 0;
+        soma.rastro_acumulado += Number(r.rastro_acumulado) || 0;
     });
 
     const n = bloco.length;
-    if (tipo === 'media') {
-        for (let key in soma) soma[key] = (soma[key] / n).toFixed(2);
+    if (tipo === 'media' && n > 0) {
+        for (let key in soma) soma[key] = soma[key] / n;
+    }
+
+    // ✅ Aplicar arredondamento apenas se houver dados
+    for (let key in soma) {
+        soma[key] = arredondarCustom(soma[key]);
     }
 
     return {
-        inicio: intervaloInicio ? intervaloInicio.toISOString() : bloco[0].timestamp,
-        fim: intervaloFim ? intervaloFim.toISOString() : bloco[bloco.length - 1].timestamp,
+        inicio: intervaloInicio ? intervaloInicio.toISOString() : bloco[0]?.timestamp,
+        fim: intervaloFim ? intervaloFim.toISOString() : bloco[bloco.length - 1]?.timestamp,
         ...soma
     };
 }

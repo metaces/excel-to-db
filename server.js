@@ -1,16 +1,18 @@
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+
 const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'senha123', // ajuste sua senha
-  database: 'finance_data'
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME
 };
 
 // Busca regra específica para o ativo pelo código
