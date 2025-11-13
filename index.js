@@ -1,11 +1,10 @@
-
+require('dotenv').config();
 const fs = require('fs');
 const csv = require('csv-parser');
 const mysql = require('mysql2/promise');
 const cron = require('node-cron');
 const { processarAtivos } = require('./processa-ativos');
 const { atualizarGrafico } = require('./atualizar-grafico');
-require('dotenv').config();
 
 const dbConfig = {
   host: process.env.DB_HOST,

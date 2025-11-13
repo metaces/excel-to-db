@@ -1,3 +1,13 @@
+require('dotenv').config();
+const WebSocket = require('ws');
+const mysql = require('mysql2/promise');
+
+const dbConfig = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME
+};
 
 function arredondarCustom(valor) {
     if (isNaN(valor)) valor = 0;
@@ -11,19 +21,6 @@ function arredondarCustom(valor) {
     const resultado = sinal * parteInteira;
     return resultado.toFixed(2);
 }
-
-
-const WebSocket = require('ws');
-const mysql = require('mysql2/promise');
-
-require('dotenv').config();
-
-const dbConfig = {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME
-};
 
 const wss = new WebSocket.Server({ port: 8080 });
 
