@@ -1,0 +1,14 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copia apenas arquivos necessários
+COPY package*.json ./
+RUN npm install --production
+
+COPY server.js ./
+
+# Porta exposta
+EXPOSE 3000
+
+CMD ["node", "server.js"]

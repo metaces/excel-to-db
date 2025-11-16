@@ -1,0 +1,47 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: node-server
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mysql-new
+    networks:
+      - app-network
+
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.websocket
+    container_name: node-websocket
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql-new
+    networks:
+      - app-network
+
+  mysql-new:
+    image: mysql:8.0
+    container_name: mysql-new
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: senha123
+      MYSQL_DATABASE: finance_data_new
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
