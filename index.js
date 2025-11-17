@@ -13,8 +13,8 @@ const dbConfig = {
   database: process.env.DB_NAME
 };
 
-const cotacoesPath = 'C:/Users/cealbert/Downloads/Macro_Watchlist_MACROEXCEL.csv';
-const minFerrPath = 'C:/Users/cealbert/Downloads/MinFerr.csv';
+const cotacoesPath = '/app/data/Macro_Watchlist_MACROEXCEL.csv';
+const minFerrPath = '/app/data/MinFerr.csv';
 
 function readCSV(filePath) {
   return new Promise((resolve, reject) => {

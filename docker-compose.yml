@@ -25,6 +25,19 @@ services:
     networks:
       - app-network
 
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: node-cron
+    env_file: .env
+    depends_on:
+      - mysql-new
+    networks:
+      - app-network
+    volumes:
+      - /mnt/c/Users/cealbert/Downloads:/app/data
+
   mysql-new:
     image: mysql:8.0
     container_name: mysql-new
