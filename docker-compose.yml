@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   server:
     build:
@@ -8,9 +10,23 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - mysql-new
+      mysql-new:
+        condition: service_healthy
     networks:
       - app-network
+    volumes:
+      - /mnt/c/Users/cealbert/Downloads:/app/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   websocket:
     build:
@@ -21,36 +37,40 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - mysql-new
+      mysql-new:
+        condition: service_healthy
     networks:
       - app-network
-
-  cron:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-    container_name: node-cron
-    env_file: .env
-    depends_on:
-      - mysql-new
-    networks:
-      - app-network
-    volumes:
-      - /mnt/c/Users/cealbert/Downloads:/app/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   mysql-new:
     image: mysql:8.0
     container_name: mysql-new
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: senha123
-      MYSQL_DATABASE: finance_data_new
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
     ports:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   app-network:

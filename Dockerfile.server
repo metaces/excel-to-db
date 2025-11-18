@@ -5,13 +5,10 @@ ENV TZ=America/Sao_Paulo
 
 WORKDIR /app
 
-# Copia apenas arquivos necessários
 COPY package*.json ./
 RUN npm install --production
 
-COPY server.js ./
+COPY . .
 
-# Porta exposta
-EXPOSE 3000
-
+# Agora o entrypoint é o server.js (API + controle do cron)
 CMD ["node", "server.js"]
