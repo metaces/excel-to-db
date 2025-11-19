@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3.9'
 
 services:
   server:
@@ -6,57 +6,51 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: node-server
-    env_file: .env
+    env_file:
+      - .env
+    environment:
+      - DATA_PATH=/app/data
     ports:
-      - "3000:3000"
+      - "${PORT}:3000"
+    volumes:
+      - /mnt/c/Users/cealbert/Downloads:/app/data
+      - .:/app:ro
     depends_on:
       mysql-new:
         condition: service_healthy
-    networks:
-      - app-network
-    volumes:
-      - /mnt/c/Users/cealbert/Downloads:/app/data
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 3
 
   websocket:
     build:
       context: .
       dockerfile: Dockerfile.websocket
     container_name: node-websocket
-    env_file: .env
+    env_file:
+      - .env
     ports:
       - "8080:8080"
+    volumes:
+      - .:/app:ro
     depends_on:
       mysql-new:
         condition: service_healthy
-    networks:
-      - app-network
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 3
 
   mysql-new:
     image: mysql:8.0
     container_name: mysql-new
-    restart: always
+    env_file:
+      - .env
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -64,16 +58,16 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    networks:
-      - app-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
 
 networks:
-  app-network:
+  default:
+    name: app-network
     driver: bridge
 
 volumes:

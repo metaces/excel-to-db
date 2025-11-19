@@ -13,8 +13,52 @@ const dbConfig = {
   database: process.env.DB_NAME
 };
 
-const cotacoesPath = '/app/data/Macro_Watchlist_MACROEXCEL.csv';
-const minFerrPath = '/app/data/MinFerr.csv';
+// ✅ Caminho dinâmico via variável de ambiente
+const dataPath = process.env.DATA_PATH || '/app/data';
+const cotacoesPath = `${dataPath}/Macro_Watchlist_MACROEXCEL.csv`;
+const minFerrPath = `${dataPath}/MinFerr.csv`;
+
+// Função genérica para ler CSV com validação
+function readCSV(filePath) {
+    return new Promise((resolve, reject) => {
+        if (!fs.existsSync(filePath)) {
+            console.error(`❌ Arquivo não encontrado: ${filePath}`);
+            return reject(new Error(`Arquivo ausente: ${filePath}`));
+        }
+        console.log(`✅ Lendo arquivo: ${filePath}`);
+        const results = [];
+        fs.createReadStream(filePath)
+            .pipe(csv({ separator: ',' }))
+            .on('data', (data) => results.push(data))
+            .on('end', () => resolve(results))
+            .on('error', (err) => reject(err));
+    });
+}
+
+async function readCotacoes() {
+    const rows = await readCSV(cotacoesPath);
+    return rows.map(r => {
+        const row = {};
+        for (const key in r) {
+            row[key.replace(/"/g, '').trim()] = r[key];
+        }
+        return {
+            nome: (row['Nome'] || '').trim(),
+            codigo: (row['Códigos'] || '').trim().toUpperCase(),
+            preco: parseFloat((row['Prévio'] || '0').replace(',', '.')) || 0,
+            variacao: parseFloat((row['Var%'] || '0').replace('%', '').replace(',', '.')) || 0,
+            tipo_contagem: 'simple'
+        };
+    });
+}
+
+async function readMinFerr() {
+    const rows = await readCSV(minFerrPath);
+    const valorStr = rows[0]['coluna1'] || '0';
+    return parseFloat(valorStr.replace('%', '').replace(',', '.')) || 0;
+}
+
+// Restante da lógica original mantida...
 
 // Função genérica para ler CSV
 function readCSV(filePath) {
