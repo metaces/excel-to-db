@@ -1,0 +1,27 @@
+FROM node:18-alpine
+
+# Define timezone para evitar problemas com cron e MySQL
+ENV TZ=America/Sao_Paulo
+
+# ✅ Define caminho dinâmico para dados
+ENV DATA_PATH=/app/data
+
+WORKDIR /app
+
+# Copia apenas arquivos necessários para instalar dependências
+COPY package*.json ./
+
+# Instala dependências em modo produção
+RUN npm ci --only=production && npm cache clean --force
+
+# Copia todo o código da aplicação
+COPY . .
+
+# ✅ Cria diretório de dados e ajusta permissões
+RUN mkdir -p $DATA_PATH && chown -R node:node $DATA_PATH
+
+# Define usuário não-root para segurança
+USER node
+
+# Agora o entrypoint é o server.js (API + controle do cron)
+CMD ["node", "server.js"]

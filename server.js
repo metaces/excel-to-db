@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
+const { startCron, stopCron, getCronStatus } = require('./index'); // Importa funções do cron
 
 const app = express();
 app.use(cors());
@@ -203,6 +204,24 @@ app.post('/volumeDiaAnterior', async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Erro ao inserir VolumeDiaAnterior' });
   }
+});
+
+// Novo: iniciar cron
+app.post('/cron/start', (req, res) => {
+  startCron();
+  res.json({ message: 'Cron iniciado.' });
+});
+
+// Novo: parar cron
+app.post('/cron/stop', (req, res) => {
+  stopCron();
+  res.json({ message: 'Cron parado.' });
+});
+
+// Status do cron
+app.get('/cron/status', (req, res) => {
+  const status = getCronStatus();
+  res.json(status);
 });
 
 // Função auxiliar para definir tipo do ativo

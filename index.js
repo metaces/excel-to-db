@@ -13,9 +13,54 @@ const dbConfig = {
   database: process.env.DB_NAME
 };
 
-const cotacoesPath = 'C:/Users/cealbert/Downloads/Macro_Watchlist_MACROEXCEL.csv';
-const minFerrPath = 'C:/Users/cealbert/Downloads/MinFerr.csv';
+// ✅ Caminho dinâmico via variável de ambiente
+const dataPath = process.env.DATA_PATH || '/app/data';
+const cotacoesPath = `${dataPath}/Macro_Watchlist_MACROEXCEL.csv`;
+const minFerrPath = `${dataPath}/MinFerr.csv`;
 
+// Função genérica para ler CSV com validação
+function readCSV(filePath) {
+    return new Promise((resolve, reject) => {
+        if (!fs.existsSync(filePath)) {
+            console.error(`❌ Arquivo não encontrado: ${filePath}`);
+            return reject(new Error(`Arquivo ausente: ${filePath}`));
+        }
+        console.log(`✅ Lendo arquivo: ${filePath}`);
+        const results = [];
+        fs.createReadStream(filePath)
+            .pipe(csv({ separator: ',' }))
+            .on('data', (data) => results.push(data))
+            .on('end', () => resolve(results))
+            .on('error', (err) => reject(err));
+    });
+}
+
+async function readCotacoes() {
+    const rows = await readCSV(cotacoesPath);
+    return rows.map(r => {
+        const row = {};
+        for (const key in r) {
+            row[key.replace(/"/g, '').trim()] = r[key];
+        }
+        return {
+            nome: (row['Nome'] || '').trim(),
+            codigo: (row['Códigos'] || '').trim().toUpperCase(),
+            preco: parseFloat((row['Prévio'] || '0').replace(',', '.')) || 0,
+            variacao: parseFloat((row['Var%'] || '0').replace('%', '').replace(',', '.')) || 0,
+            tipo_contagem: 'simple'
+        };
+    });
+}
+
+async function readMinFerr() {
+    const rows = await readCSV(minFerrPath);
+    const valorStr = rows[0]['coluna1'] || '0';
+    return parseFloat(valorStr.replace('%', '').replace(',', '.')) || 0;
+}
+
+// Restante da lógica original mantida...
+
+// Função genérica para ler CSV
 function readCSV(filePath) {
   return new Promise((resolve, reject) => {
     const results = [];
@@ -27,12 +72,13 @@ function readCSV(filePath) {
   });
 }
 
+// Lê cotacoes do arquivo CSV
 async function readCotacoes() {
   const rows = await readCSV(cotacoesPath);
   return rows.map(r => {
     const row = {};
     for (const key in r) {
-      row[key.replace(/"/g, '').trim()] = r[key];
+      row[key.replace(/\"/g, '').trim()] = r[key];
     }
     return {
       nome: (row['Nome'] || '').trim(),
@@ -44,12 +90,14 @@ async function readCotacoes() {
   });
 }
 
+// Lê valor do MinFerr
 async function readMinFerr() {
   const rows = await readCSV(minFerrPath);
   const valorStr = rows[0]['coluna1'] || '0';
   return parseFloat(valorStr.replace('%', '').replace(',', '.')) || 0;
 }
 
+// Calcula ativos compostos
 async function calcularAtivosCompostos(cotacoes, conn) {
   const [compostos] = await conn.execute('SELECT codigo, componentes FROM ativos_compostos');
   const novosAtivos = [];
@@ -75,10 +123,7 @@ async function calcularAtivosCompostos(cotacoes, conn) {
       const ativoOriginal = cotacoes.find(c => c.codigo === cod.trim().toUpperCase());
       if (ativoOriginal) {
         codigosComponentes.add(ativoOriginal.codigo);
-        novosAtivos.push({
-          ...ativoOriginal,
-          tipo_contagem: 'composto'
-        });
+        novosAtivos.push({ ...ativoOriginal, tipo_contagem: 'composto' });
       }
     }
   }
@@ -87,6 +132,7 @@ async function calcularAtivosCompostos(cotacoes, conn) {
   return { ativosCompostos: novosAtivos, cotacoesFiltradas };
 }
 
+// Salva cotacoes no banco
 async function saveCotacoes(cotacoes, conn) {
   const timestamp = new Date();
   for (const c of cotacoes) {
@@ -97,38 +143,29 @@ async function saveCotacoes(cotacoes, conn) {
   }
 }
 
+// Salva MinFerr no banco
 async function saveMinFerr(valor, conn, todosAtivos) {
   const timestamp = new Date();
   const codigo = 'MINFERR';
   const nome = 'MinFerr';
-
   await conn.execute(
     'INSERT INTO minfer (valor, timestamp, codigo) VALUES (?, ?, ?)',
     [valor, timestamp, codigo]
   );
-
   await conn.execute(
     'INSERT INTO cotacoes (nome, codigo, preco, variacao, timestamp) VALUES (?, ?, ?, ?, ?)',
     [nome, codigo, 0, valor, timestamp]
   );
-
-  todosAtivos.push({
-    nome,
-    codigo,
-    preco: 0,
-    variacao: valor,
-    tipo_contagem: 'simple'
-  });
+  todosAtivos.push({ nome, codigo, preco: 0, variacao: valor, tipo_contagem: 'simple' });
 }
 
+// Processa estrangeiro
 async function processarEstrangeiro(conn, todosAtivos) {
   const [rows] = await conn.execute('SELECT diferenca FROM estrangeiro ORDER BY timestamp DESC LIMIT 2');
   if (rows.length < 1) return;
-
   const atual = parseFloat(rows[0].diferenca);
   const anterior = rows.length > 1 ? parseFloat(rows[1].diferenca) : 0;
   const acum = atual - anterior;
-
   let sinal = 'Neutro';
   if (acum < -1000) sinal = 'Queda';
   else if (acum > 1000) sinal = 'Alta';
@@ -137,40 +174,27 @@ async function processarEstrangeiro(conn, todosAtivos) {
     'INSERT INTO ativos (tipo, nome, sinal, variacao, timestamp, tipo_contagem) VALUES (?, ?, ?, ?, ?, ?)',
     ['seguranca', 'Estrangeiro', sinal, acum, new Date(), 'simple']
   );
-
   await conn.execute(
     'INSERT INTO cotacoes (nome, codigo, preco, variacao, timestamp) VALUES (?, ?, ?, ?, ?)',
     ['Estrangeiro', 'ESTRANGEIRO', 0, acum, new Date()]
   );
-
-  todosAtivos.push({
-    nome: 'Estrangeiro',
-    codigo: 'ESTRANGEIRO',
-    preco: 0,
-    variacao: acum,
-    tipo_contagem: 'simple'
-  });
+  todosAtivos.push({ nome: 'Estrangeiro', codigo: 'ESTRANGEIRO', preco: 0, variacao: acum, tipo_contagem: 'simple' });
 }
 
+// Fluxo principal
 async function executarFluxo() {
   try {
     console.log('Iniciando atualização...');
     const conn = await mysql.createConnection(dbConfig);
-
     const cotacoes = await readCotacoes();
     await saveCotacoes(cotacoes, conn);
-
     const { ativosCompostos, cotacoesFiltradas } = await calcularAtivosCompostos(cotacoes, conn);
     const todosAtivos = [...cotacoesFiltradas, ...ativosCompostos];
-
     const minFerrValor = await readMinFerr();
     await saveMinFerr(minFerrValor, conn, todosAtivos);
-
     await processarEstrangeiro(conn, todosAtivos);
-
     await processarAtivos(todosAtivos);
     await atualizarGrafico();
-
     await conn.end();
     console.log('Atualização concluída.');
   } catch (err) {
@@ -178,22 +202,50 @@ async function executarFluxo() {
   }
 }
 
+
+// Controle do cron
+globalThis.cronJob = null;
 let isRunning = false;
-cron.schedule('*/2 * * * *', async () => {
-  if (isRunning) {
-    console.log('Fluxo anterior ainda em execução. Ignorando nova execução.');
+
+function startCron() {
+  if (globalThis.cronJob) {
+    console.log('Cron já está rodando.');
     return;
   }
-  isRunning = true;
-  try {
-    await executarFluxo();
-  } catch (err) {
-    console.error('Erro no cron:', err);
-  } finally {
-    isRunning = false;
-  }
-});
+  globalThis.cronJob = cron.schedule('*/2 * * * *', async () => {
+    if (isRunning) {
+      console.log('Fluxo anterior ainda em execução. Ignorando nova execução.');
+      return;
+    }
+    isRunning = true;
+    try {
+      await executarFluxo();
+    } catch (err) {
+      console.error('Erro no cron:', err);
+    } finally {
+      isRunning = false;
+    }
+  });
+  console.log('Cron iniciado.');
+}
 
-(async () => {
-  await executarFluxo();
-})();
+function stopCron() {
+  if (globalThis.cronJob) {
+    globalThis.cronJob.stop();
+    globalThis.cronJob = null;
+    console.log('Cron parado.');
+  } else {
+    console.log('Nenhum cron ativo.');
+  }
+}
+
+
+function getCronStatus() {
+  return {
+    ativo: cronJob !== null,
+    executandoFluxo: isRunning
+  };
+}
+
+
+module.exports = { startCron, stopCron, getCronStatus };
